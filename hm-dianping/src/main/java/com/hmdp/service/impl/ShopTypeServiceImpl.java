@@ -3,6 +3,7 @@ package com.hmdp.service.impl;
 import cn.hutool.core.stream.StreamUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.ShopType;
 import com.hmdp.mapper.ShopTypeMapper;
@@ -32,30 +33,33 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
     @Override
     public Result queryList() {
-        /*通过key去Redis缓存中获取列表,因为分类列表只有一个，就不用id做唯一性了*/
-        String list = stringRedisTemplate.opsForValue().get(CACHE_SHOP_TYPE_KEY);
+        /*返回给前端的类型是list类型*/
+        /*是否命中缓存*/
+        String cacheShopTypeKey = stringRedisTemplate.opsForValue().get("CACHE_SHOP_TYPE_KEY");
 
-        /*如果有缓存则直接以json的形式返回*/
-        if (StrUtil.isNotBlank(list)){
-            return Result.ok(list);
+        /*命中缓存，将json转为list返回给前端*/
+        if (StrUtil.isNotBlank(cacheShopTypeKey)){
+            return Result.ok(JSONUtil.toList(cacheShopTypeKey,ShopType.class));
         }
 
-        /*如果到这说明Redis缓存中没有分类列表，需要从mysql中查询*/
-        List<ShopType> typeList = this.list();
-        if (typeList==null&&typeList.size()!=0){
-            return Result.fail("没有找到分类列表");
+        /*没有命中，根据成绩倒序查询查询数据库*/
+        LambdaQueryWrapper<ShopType> shopTypeLambdaQueryWrapper = new LambdaQueryWrapper<>();
+        shopTypeLambdaQueryWrapper.orderByAsc(ShopType::getSort);
+        List<ShopType> list = this.list(shopTypeLambdaQueryWrapper);
+
+        /*判断list中有没有内容*/
+        if (list.size()==0){
+            /*没有内容则返回错误信息*/
+            return Result.fail("未找到店铺分类");
         }
 
-        /*到这说明拿到的list中有内容，将遍历将它的每一个元素转为json后存一个List放入缓存后返回*/
-        List<String> cacheTypeList = typeList.stream().map(shopType -> {
-            return JSONUtil.toJsonStr(shopType);
-        }).collect(Collectors.toList());
+        /*将list转成json的形式存在Redis中*/
+        stringRedisTemplate.opsForValue().set(CACHE_SHOP_TYPE_KEY,JSONUtil.toJsonStr(list));
 
-        System.out.println(cacheTypeList);
-
-
-        return Result.ok(cacheTypeList);
+        /*将数据库查到的list返回个前端*/
+        return Result.ok(list);
     }
 }
