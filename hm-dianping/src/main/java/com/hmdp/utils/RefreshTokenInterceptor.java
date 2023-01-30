@@ -26,7 +26,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        /*获取到请求中带的token并加上前缀*/
+        /*获取到请求中带的token并加上前缀就是redis中用户参数的key*/
         String token = LOGIN_USER_KEY+request.getHeader("authorization");
 
         /*如果拿到的token为空说明未登录，放行给第二个拦截器判断是否是需要登录的请求*/
