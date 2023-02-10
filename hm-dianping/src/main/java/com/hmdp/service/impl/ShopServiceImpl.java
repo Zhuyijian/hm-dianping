@@ -46,25 +46,26 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     @Override
     public Result queryById(Long id) {
+
+        Shop shop = null;
         /*解决缓存穿透问题*/
-        Shop shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, new Function<Long, Shop>() {
+        /*shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, new Function<Long, Shop>() {
             @Override
             public Shop apply(Long id) {
                 return getById(id);
             }
-        }, CACHE_SHOP_TTL, TimeUnit.MINUTES);
-
+        }, CACHE_SHOP_TTL, TimeUnit.MINUTES);*/
 
         /*通过互斥锁解决缓存击穿的问题*/
-//        shop = this.queryByLock(id);
+//        shop = this.queryByLock(id);z
 
         /*逻辑过期解决缓存击穿*/
-        cacheClient.queryWithLogicTime(CACHE_SHOP_KEY, id, Shop.class, new Function<Long, Shop>() {
+        shop = cacheClient.queryWithLogicTime(CACHE_SHOP_KEY, id, Shop.class, new Function<Long, Shop>() {
             @Override
             public Shop apply(Long aLong) {
                 return getById(aLong);
             }
-        },CACHE_SHOP_TTL,TimeUnit.MINUTES);
+        }, CACHE_SHOP_TTL, TimeUnit.MINUTES);
 
 
         /*返回mysql中查询到的数据*/

@@ -37,19 +37,18 @@ public class CacheClient {
 
     /**
      * 存储后，设置逻辑过期时间
-     *
      * @param key
      * @param value
      * @param TTL
      */
     public void setWithLogicalExpire(String key, Object value, Long TTL, TimeUnit unit) {
-
+        log.debug("进入了setWithLogicalExpire");
         RedisData redisData = new RedisData();
         redisData.setData(value);
         /*设置过期事件为当前时间加上指定的秒，将用户传的时间格式统一转成秒的形式*/
         redisData.setExpireTime(LocalDateTime.now().plusSeconds(unit.toSeconds(TTL)));
         /*存入Redis*/
-        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(value));
+        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(redisData));
     }
 
     /**
@@ -112,16 +111,20 @@ public class CacheClient {
         String key = prefix + id;
         /*因为是逻辑过期，所以Redis中一定有缓存*/
         String json = stringRedisTemplate.opsForValue().get(key);
+
         /*判断是否是个空json*/
         if (StrUtil.isBlank(json)) {
             /*直接返回空*/
             return null;
         }
+        System.out.println(json);
 
         /*将json转换为RedisData对象*/
         RedisData redisData = JSONUtil.toBean(json, RedisData.class);
         /*将RedisData中的存储的对象（Object），强转为jsonObject后转为传过来的指定类型*/
         R result = JSONUtil.toBean((JSONObject) redisData.getData(), rClass);
+
+        System.out.println(redisData);
 
         /*判断redis中的逻辑时间是否过期*/
         if (redisData.getExpireTime().isAfter(LocalDateTime.now())) {

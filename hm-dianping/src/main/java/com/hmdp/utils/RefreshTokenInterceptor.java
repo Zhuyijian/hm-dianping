@@ -44,6 +44,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         }
 
         /*到这还没放行说明map非空,则可以保存到ThreadLoad并刷新存在时间了*/
+        /*将Map转换为用户Dto类*/
         UserDTO userDTO = BeanUtil.fillBeanWithMap(entries, new UserDTO(), false);
         UserHolder.saveUser(userDTO);
         stringRedisTemplate.expire(token,LOGIN_USER_TTL,TimeUnit.MINUTES);
