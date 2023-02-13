@@ -11,8 +11,10 @@ import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.service.IVoucherService;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +23,7 @@ import java.time.LocalDateTime;
 
 /**
  * <p>
- *  服务实现类
+ * 服务实现类
  * </p>
  *
  * @author Zhu
@@ -35,10 +37,14 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private ISeckillVoucherService iSeckillVoucherService;
 
     @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
     private RedisIdWorker redisIdWorker;
 
     /**
      * 秒杀下单，创建订单
+     *
      * @param voucherId
      * @return
      */
@@ -51,32 +57,43 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         /*未开始或过期则返回异常*/
 
         /*开始日期在当前之后说明秒杀未开始*/
-        if (voucher.getBeginTime().isAfter(LocalDateTime.now())){
+        if (voucher.getBeginTime().isAfter(LocalDateTime.now())) {
             return Result.fail("秒杀未开始!");
         }
 
         /*截至日期在当前日期之前说明秒杀已结束*/
-        if (voucher.getEndTime().isBefore(LocalDateTime.now())){
+        if (voucher.getEndTime().isBefore(LocalDateTime.now())) {
             return Result.fail("秒杀已结束！");
         }
 
 
         /*判断库存是否充足*/
         /*不过库存不足则返回异常*/
-        if (voucher.getStock()<1){
+        if (voucher.getStock() < 1) {
             return Result.fail("库存不足");
         }
 
         /*从线程域中拿到用户id*/
         Long userId = UserHolder.getUser().getId();
 
-        /*intern() 如果字符串s在字符串常量池中存在对应字面量,则intern()方法返回该字面量的地址
-        ;如果不存在,则创建一个对应的字面量,并返回该字面量的地址*/
-        synchronized (voucherId.toString().intern()){
-            /*此时的this是锁住的对象，不具有事务功能，所以需要手动获取Spring的aop对象 通过aop对象后手动调用*/
-            /*这样就可以事务提交后再释放锁*/
+
+        /*尝试获取Redis分布锁*/
+        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("order" + userId, stringRedisTemplate);
+        boolean lock = simpleRedisLock.tryLock(10L);
+
+        /*还是使用反向判断，判断如果没有获取到锁*/
+        if (!lock) {
+            /*说明是同一个用户id，返回错误信息即可*/
+            return Result.fail("服务器繁忙");
+        }
+        /*到这说明已经获取到了锁对象，运行业务逻辑*/
+        /*此时的this是锁住的对象，不具有事务功能，所以需要手动获取Spring的aop对象 通过aop对象后手动调用*/
+        /*这样就可以事务提交后再释放锁*/
+        try {
             IVoucherOrderService currentProxy = (IVoucherOrderService) AopContext.currentProxy();
             return currentProxy.createVoucherOder(voucherId, userId);
+        } finally {
+            simpleRedisLock.unlock();
         }
     }
 
@@ -86,7 +103,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         Long count = query().eq("user_id", userId)
                 .eq("voucher_id", voucherId).count();
 
-        if (count>0){
+        if (count > 0) {
             return Result.fail("已下过单,不能重复");
         }
 
@@ -96,13 +113,13 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 .setSql("stock = stock-1")
                 .eq("voucher_id", voucherId)
                 /*乐观锁，库存大于0可成功*/
-                .gt("stock",0)
+                .gt("stock", 0)
                 .update();
 
-        log.debug(""+isSuccess);
+        log.debug("" + isSuccess);
 
         /*如果没成功*/
-        if (!isSuccess){
+        if (!isSuccess) {
             return Result.fail("库存不足!");
         }
 

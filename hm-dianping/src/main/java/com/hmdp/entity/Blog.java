@@ -36,6 +36,7 @@ public class Blog implements Serializable {
      * 商户id
      */
     private Long shopId;
+
     /**
      * 用户id
      */
