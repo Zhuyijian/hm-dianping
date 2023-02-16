@@ -2,10 +2,15 @@ package com.hmdp.utils;
 
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.BooleanUtil;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
 public class SimpleRedisLock implements ILock{
@@ -14,14 +19,29 @@ public class SimpleRedisLock implements ILock{
     /*锁标识的前缀*/
     private static final String ID_PREFIX = UUID.randomUUID().toString()+"-";
 
+    /*锁名称key*/
     private String name;
     private StringRedisTemplate stringRedisTemplate;
 
+    /*初始化lua使用的对象*/
+    private static final DefaultRedisScript<Long> UNLOCK_SCRIPT;
+
+    /*通过静态代码块初始化lua*/
+    static {
+        UNLOCK_SCRIPT = new DefaultRedisScript<>();
+        UNLOCK_SCRIPT.setLocation(new ClassPathResource("unlock.lua"));
+        UNLOCK_SCRIPT.setResultType(Long.class);
+
+    }
 
     public SimpleRedisLock(String name, StringRedisTemplate stringRedisTemplate) {
         this.name = name;
         this.stringRedisTemplate = stringRedisTemplate;
     }
+
+    /*阻塞队列对象 ， 阻塞队列：有元素时队列进行工作，无元素则进入阻塞状态*/
+
+
 
     /**
      * 尝试获取锁
@@ -45,12 +65,11 @@ public class SimpleRedisLock implements ILock{
      */
     @Override
     public void unlock() {
-        /*释放锁之前需要判断Redis中存的标识是否是本线程的表示，防止误释放*/
-        String threadId = stringRedisTemplate.opsForValue().get(KEY_PREFIX + name);
-
-        /*常量对比Redis中的锁内容*/
-        if (ID_PREFIX.equals(threadId)) {
-            stringRedisTemplate.delete(KEY_PREFIX + name);
-        }
+        /*调用lua脚本*/
+        stringRedisTemplate.execute(
+                UNLOCK_SCRIPT,
+                Collections.singletonList(KEY_PREFIX+name),
+                ID_PREFIX + Thread.currentThread().getId()
+        );
     }
 }
