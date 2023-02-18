@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.http.HttpRequest;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
@@ -22,6 +23,7 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
 import java.util.HashMap;
@@ -117,6 +119,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
         /*返回redis中存储userTdo的key作为token返回给前端*/
         return Result.ok(uuid);
+    }
+
+    /**
+     * 登出
+     * @return
+     */
+    @Override
+    public Result logout(HttpServletRequest request) {
+//        删除Redis中的用户信息删除即可
+        String token = request.getHeader("authorization");
+        String key = LOGIN_USER_KEY+token;
+
+        Boolean delete = stringRedisTemplate.delete(key);
+
+        return Result.ok("退出登录成功");
     }
 
     /**

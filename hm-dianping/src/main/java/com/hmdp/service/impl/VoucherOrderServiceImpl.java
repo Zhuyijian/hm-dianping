@@ -125,7 +125,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     /**
      * 秒杀下单，创建订单
-     *
+     
      * @param voucherId
      * @return
      */
@@ -137,7 +137,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 SECKILL_SCRIPT,
                 Collections.emptyList(),
                 voucherId.toString(),
-                userId);
+                userId.toString());
 
 //        将lua脚本返回值转为int便于判断,如果lua脚本返回的不是0，说明可能是库存不足或者已经重复下单过
         int resultInt = result.intValue();

@@ -27,16 +27,17 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         /*获取到请求中带的token并加上前缀就是redis中用户参数的key*/
-        String token = LOGIN_USER_KEY+request.getHeader("authorization");
-
+        String token = request.getHeader("authorization");
         /*如果拿到的token为空说明未登录，放行给第二个拦截器判断是否是需要登录的请求*/
         /*为啥不在这就拦截，在这拦截那么不需要登录的请求也被要求登录了（因为这个拦截器是拦截所有请求的，难道我不登录访问个普通网页，也给我拦截吗）*/
         if (StrUtil.isBlank(token)){
             return true;
         }
 
+        String key = LOGIN_USER_KEY+token;
+
         /*通过token拿到redis中的用户数据*/
-        Map<Object, Object> entries = stringRedisTemplate.opsForHash().entries(token);
+        Map<Object, Object> entries = stringRedisTemplate.opsForHash().entries(key);
 
         /*这不是判断entries是不是空,而是判断是它否是一个空map，里面是否有东西*/
         if (entries.isEmpty()) {
@@ -47,7 +48,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         /*将Map转换为用户Dto类*/
         UserDTO userDTO = BeanUtil.fillBeanWithMap(entries, new UserDTO(), false);
         UserHolder.saveUser(userDTO);
-        stringRedisTemplate.expire(token,LOGIN_USER_TTL,TimeUnit.MINUTES);
+        stringRedisTemplate.expire(key,LOGIN_USER_TTL,TimeUnit.MINUTES);
 
         /*放行*/
         return true;
